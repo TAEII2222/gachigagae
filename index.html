@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>같이가개 — 반려동반 장소 지도</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <style>
   :root{
     --bg: #FAF9F4;
@@ -122,8 +121,6 @@
     min-height: 0;
   }
   #map { width: 100%; height: 100%; background: #EDEBE3; }
-  .leaflet-control-attribution { font-size: 10px !important; }
-  .leaflet-control-zoom { display: none; }
 
   .map-hint {
     position: absolute;
@@ -541,16 +538,18 @@
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=4pq1lhz3ti"></script>
 <script>
 (function () {
   const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbweuaW_Hdpk8u5MzaQxfOR4wRmDA8LSB-Isne5M4md0Piyke30_H7dAfGeiyRyBIi4m0Q/exec';
   const FAVORITES_KEY = 'gachigagae_favorites';
-  const DEFAULT_CENTER = [37.5665, 126.9780];
+  const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 };
 
   let places = [];
   let favorites = [];
-  let map, markersLayer;
+  let map;
+  let markers = [];
+  let infoWindow;
   let pendingPin = null;
   let pendingMarker = null;
   let pickingMode = false;
@@ -617,12 +616,11 @@
   }
 
   function placePinIcon() {
-    return L.divIcon({
-      className: '',
-      html: '<div class="custom-pin"><span class="pin-dot"></span></div>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 19],
-    });
+    return {
+      content: '<div class="custom-pin"><span class="pin-dot"></span></div>',
+      size: new naver.maps.Size(20, 20),
+      anchor: new naver.maps.Point(10, 19),
+    };
   }
 
   function filteredPlaces() {
@@ -645,26 +643,28 @@
   }
 
   function initMap() {
-    map = L.map('map', { zoomControl: false }).setView(DEFAULT_CENTER, 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd',
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-    }).addTo(map);
-    markersLayer = L.layerGroup().addTo(map);
-
-    map.on('click', (e) => {
-      if (!pickingMode) return;
-      setPendingPin(e.latlng.lat, e.latlng.lng);
+    map = new naver.maps.Map('map', {
+      center: new naver.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
+      zoom: 12,
+      zoomControl: false,
+      logoControlOptions: { position: naver.maps.Position.BOTTOM_LEFT },
     });
+    infoWindow = new naver.maps.InfoWindow({ content: ' ', borderWidth: 0 });
 
-    map.whenReady(() => setTimeout(() => map.invalidateSize(), 200));
+    naver.maps.Event.addListener(map, 'click', (e) => {
+      if (!pickingMode) return;
+      setPendingPin(e.coord.y, e.coord.x);
+    });
   }
 
   function setPendingPin(lat, lng) {
     pendingPin = { lat, lng };
-    if (pendingMarker) map.removeLayer(pendingMarker);
-    pendingMarker = L.marker([lat, lng], { icon: placePinIcon() }).addTo(map);
+    if (pendingMarker) pendingMarker.setMap(null);
+    pendingMarker = new naver.maps.Marker({
+      position: new naver.maps.LatLng(lat, lng),
+      map,
+      icon: placePinIcon(),
+    });
     el('pin-status').classList.add('set');
     el('pin-status').textContent = `📍 위치 지정됨 (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
     checkSubmitEnabled();
@@ -678,20 +678,35 @@
     return html;
   }
 
+  function popupContent(p) {
+    const cond = conditionLabel(p.condition);
+    const status = statusLabel(p.status);
+    return (
+      `<div style="padding:10px 12px;max-width:220px;">` +
+      `<strong>${escapeHtml(p.name)}</strong>` +
+      (status ? ` <span class="tag ${status.cls}">${status.text}</span>` : '') +
+      `<br/><span style="color:#7A8078;font-size:12px;">${cond.text}</span>` +
+      `<div style="margin-top:4px;">${perkTags(p)}</div>` +
+      (p.note ? `<div style="margin-top:4px;font-size:12.5px;">${escapeHtml(p.note)}</div>` : '') +
+      `</div>`
+    );
+  }
+
   function renderMarkers() {
-    markersLayer.clearLayers();
+    markers.forEach(m => m.setMap(null));
+    markers = [];
     filteredPlaces().forEach((p) => {
-      const marker = L.marker([p.lat, p.lng], { icon: placePinIcon() });
-      const cond = conditionLabel(p.condition);
-      const status = statusLabel(p.status);
-      marker.bindPopup(
-        `<strong>${escapeHtml(p.name)}</strong>` +
-        (status ? ` <span class="tag ${status.cls}">${status.text}</span>` : '') +
-        `<br/><span style="color:#7A8078;font-size:12px;">${cond.text}</span>` +
-        `<div style="margin-top:4px;">${perkTags(p)}</div>` +
-        (p.note ? `<div style="margin-top:4px;font-size:12.5px;">${escapeHtml(p.note)}</div>` : '')
-      );
-      marker.addTo(markersLayer);
+      const marker = new naver.maps.Marker({
+        position: new naver.maps.LatLng(p.lat, p.lng),
+        map,
+        icon: placePinIcon(),
+      });
+      marker.__place = p;
+      naver.maps.Event.addListener(marker, 'click', () => {
+        infoWindow.setContent(popupContent(p));
+        infoWindow.open(map, marker);
+      });
+      markers.push(marker);
     });
   }
 
@@ -734,12 +749,13 @@
         <button class="fav-btn ${isFavorite(p.id) ? 'active' : ''}" data-id="${p.id}">${isFavorite(p.id) ? '♥' : '♡'}</button>
       `;
       card.querySelector('.body').addEventListener('click', () => {
-        map.setView([p.lat, p.lng], 16, { animate: true });
-        const found = markersLayer.getLayers().find(m => {
-          const ll = m.getLatLng();
-          return ll.lat === p.lat && ll.lng === p.lng;
-        });
-        if (found) found.openPopup();
+        map.morph(new naver.maps.LatLng(p.lat, p.lng), 16);
+        const found = markers.find(m => m.__place && m.__place.id === p.id);
+        if (found) {
+          infoWindow.setContent(popupContent(p));
+          infoWindow.open(map, found);
+        }
+        el('sheet-overlay').classList.remove('show');
       });
       const favBtn = card.querySelector('.fav-btn');
       favBtn.addEventListener('click', (evt) => {
@@ -767,7 +783,7 @@
   // ---- Modal control (공개 제보 폼) ----
   function openModal() {
     pendingPin = null;
-    if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
+    if (pendingMarker) { pendingMarker.setMap(null); pendingMarker = null; }
     el('f-name').value = '';
     el('f-address').value = '';
     el('f-note').value = '';
@@ -897,14 +913,20 @@
     el('locate-btn').addEventListener('click', () => {
       if (!navigator.geolocation) { showToast('위치 정보를 사용할 수 없어요.'); return; }
       navigator.geolocation.getCurrentPosition(
-        (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 15),
+        (pos) => {
+          map.setCenter(new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude));
+          map.setZoom(15);
+        },
         () => showToast('위치 권한이 필요해요.')
       );
     });
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 13),
+        (pos) => {
+          map.setCenter(new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude));
+          map.setZoom(13);
+        },
         () => {}
       );
     }
