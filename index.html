@@ -94,25 +94,18 @@
   }
   .fchip.active { background: var(--pine); border-color: var(--pine); color: #fff; }
 
-  /* Region select row */
+  /* Region chips row — 다중 선택 가능 */
   #region-row {
     display: flex;
-    align-items: center;
     gap: 8px;
     padding: 8px 14px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
+    overflow-x: auto;
     flex-shrink: 0;
+    scrollbar-width: none;
   }
-  #region-select {
-    flex: 1;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 6px 8px;
-    font-size: 12.5px;
-    color: var(--ink);
-    background: var(--bg);
-  }
+  #region-row::-webkit-scrollbar { display: none; }
 
   /* Map — 겹치는 요소 최소화 */
   #map-wrap {
@@ -426,6 +419,7 @@
     transform: rotate(-45deg);
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    cursor: pointer;
   }
   .custom-pin .pin-dot {
     width: 7px; height: 7px;
@@ -447,16 +441,13 @@
 
   <div id="filter-row">
     <div class="fchip active" data-val="all">전체</div>
-    <div class="fchip" data-val="free">전 구역</div>
-    <div class="fchip" data-val="limit">일부 구역</div>
-    <div class="fchip" data-val="noRestriction">견종·체중 제한없음</div>
+    <div class="fchip" data-val="free">전 구역 입장 가능</div>
+    <div class="fchip" data-val="limit">일부 구역만 가능</div>
     <div class="fchip" data-val="favorite">♥ 즐겨찾기</div>
   </div>
 
   <div id="region-row">
-    <select id="region-select">
-      <option value="all">전체 지역</option>
-    </select>
+    <div class="fchip active" data-region="all">전체 지역</div>
   </div>
 
   <div id="map-wrap">
@@ -554,7 +545,7 @@
   let pendingMarker = null;
   let pickingMode = false;
   let currentFilter = 'all';
-  let currentRegion = 'all';
+  const selectedRegions = new Set(); // 비어있으면 전체 지역
   let sortByOldestChecked = false;
   let carrierFree = false;
   let noRestrictionOn = false;
@@ -597,8 +588,8 @@
   }
 
   function conditionLabel(val) {
-    if (val === 'limit') return { text: '일부 구역', cls: 'limit' };
-    return { text: '전 구역', cls: 'free' };
+    if (val === 'limit') return { text: '일부 구역만 가능', cls: 'limit' };
+    return { text: '전 구역 입장 가능', cls: 'free' };
   }
 
   function statusLabel(val) {
@@ -607,12 +598,18 @@
     return null;
   }
 
-  // 주소에서 시/도 + 구/군 단위만 추출 (예: "서울 중구 을지로 123" → "서울 중구")
+  // 주소에서 시/도 + 구/군/시 단위만 추출 (예: "서울 중구 을지로 123" → "서울 중구")
   function regionOf(address) {
     if (!address) return '기타';
-    const parts = address.trim().split(/\s+/);
+    const trimmed = address.trim();
+    // "○○특별시/광역시/도 ○○구/군/시" 패턴을 우선으로 찾는다
+    const match = trimmed.match(/(\S*?(?:특별시|광역시|특별자치시|특별자치도|도))\s+(\S*?(?:시|군|구))\b/);
+    if (match) return `${match[1]} ${match[2]}`;
+    const parts = trimmed.split(/\s+/);
+    // 시/도가 빠지고 구/군/시만 있는 경우 그대로 사용 (데이터 보정 전 방어)
+    if (parts[0] && /(시|군|구)$/.test(parts[0])) return parts[0];
     if (parts.length >= 2) return `${parts[0]} ${parts[1]}`;
-    return parts[0];
+    return parts[0] || '기타';
   }
 
   function placePinIcon() {
@@ -626,20 +623,50 @@
   function filteredPlaces() {
     return places.filter((p) => {
       if (currentFilter === 'favorite' && !isFavorite(p.id)) return false;
-      if (currentFilter === 'noRestriction' && !p.noRestriction) return false;
       if (['free', 'limit'].includes(currentFilter) && p.condition !== currentFilter) return false;
-      if (currentRegion !== 'all' && regionOf(p.address) !== currentRegion) return false;
+      if (selectedRegions.size > 0 && !selectedRegions.has(regionOf(p.address))) return false;
       return true;
     });
   }
 
   function updateRegionOptions() {
     const regions = Array.from(new Set(places.map(p => regionOf(p.address)))).sort();
-    const select = el('region-select');
-    const prev = select.value;
-    select.innerHTML = '<option value="all">전체 지역</option>' +
-      regions.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
-    select.value = regions.includes(prev) ? prev : 'all';
+    const row = el('region-row');
+    // "전체 지역" 칩은 그대로 두고 지역 칩만 다시 그린다
+    row.querySelectorAll('.fchip[data-region]:not([data-region="all"])').forEach(c => c.remove());
+    regions.forEach((r) => {
+      const chip = document.createElement('div');
+      chip.className = 'fchip';
+      chip.dataset.region = r;
+      chip.textContent = r;
+      if (selectedRegions.has(r)) chip.classList.add('active');
+      row.appendChild(chip);
+    });
+    bindRegionChips();
+    updateAllRegionChipState();
+  }
+
+  function updateAllRegionChipState() {
+    el('region-row').querySelector('.fchip[data-region="all"]')
+      .classList.toggle('active', selectedRegions.size === 0);
+  }
+
+  function bindRegionChips() {
+    el('region-row').querySelectorAll('.fchip').forEach((chip) => {
+      chip.onclick = () => {
+        const r = chip.dataset.region;
+        if (r === 'all') {
+          selectedRegions.clear();
+        } else {
+          if (selectedRegions.has(r)) selectedRegions.delete(r); else selectedRegions.add(r);
+        }
+        el('region-row').querySelectorAll('.fchip[data-region]:not([data-region="all"])')
+          .forEach(c => c.classList.toggle('active', selectedRegions.has(c.dataset.region)));
+        updateAllRegionChipState();
+        renderMarkers();
+        renderList();
+      };
+    });
   }
 
   function initMap() {
@@ -672,10 +699,8 @@
   }
 
   function perkTags(p) {
-    let html = '';
-    if (p.noCarrier) html += `<span class="tag perk">이동장 불필요</span>`;
-    if (p.noRestriction) html += `<span class="tag perk">제한없음</span>`;
-    return html;
+    // 견종·체중 제한없음은 등록 조건상 모든 장소의 기본값이라 배지로 반복 표시하지 않습니다.
+    return p.noCarrier ? `<span class="tag perk">이동장 불필요</span>` : '';
   }
 
   function popupContent(p) {
@@ -887,12 +912,6 @@
         renderMarkers();
         renderList();
       });
-    });
-
-    el('region-select').addEventListener('change', (e) => {
-      currentRegion = e.target.value;
-      renderMarkers();
-      renderList();
     });
 
     el('list-toggle-btn').addEventListener('click', () => {
