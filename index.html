@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>같이가개 — 반려동반 장소 지도</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root{
+    --bg: #FAF9F4;
+    --surface: #FFFFFF;
+    --line: #E7E3D8;
+    --ink: #1E241E;
+    --ink-muted: #7A8078;
+    --pine: #2C4A3E;
+    --pine-light: #4C7C68;
+    --amber: #C97B3D;
+    --amber-soft: #F3E2CE;
+    --heart: #D1495B;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app {
+    max-width: 520px;
+    margin: 0 auto;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Header — 최소화 */
+  header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .brand-mark { font-size: 18px; line-height: 1; }
+  h1 {
+    font-size: 16.5px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+    color: var(--pine);
+  }
+  .header-count {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-weight: 600;
+  }
+
+  /* Filter chips — 카테고리 필터 */
+  #filter-row {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  #filter-row::-webkit-scrollbar { display: none; }
+  .fchip {
+    flex-shrink: 0;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 6px 13px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fchip.active { background: var(--pine); border-color: var(--pine); color: #fff; }
+
+  /* Region select row */
+  #region-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  #region-select {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12.5px;
+    color: var(--ink);
+    background: var(--bg);
+  }
+
+  /* Map — 겹치는 요소 최소화 */
+  #map-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #map { width: 100%; height: 100%; background: #EDEBE3; }
+  .leaflet-control-attribution { font-size: 10px !important; }
+  .leaflet-control-zoom { display: none; }
+
+  .map-hint {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30,36,30,0.9);
+    color: #fff;
+    font-size: 12.5px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    z-index: 500;
+    display: none;
+    white-space: nowrap;
+  }
+  .map-hint.show { display: block; }
+
+  .locate-btn {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-size: 17px;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+
+  /* 제보하기 버튼 — 모두에게 노출 */
+  .fab {
+    position: absolute;
+    right: 12px;
+    bottom: 62px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--amber);
+    color: #fff;
+    border: none;
+    font-size: 24px;
+    box-shadow: 0 4px 14px rgba(201,123,61,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    cursor: pointer;
+  }
+  .fab:active { transform: scale(0.94); }
+
+  /* 목록 보기 토글 버튼 */
+  .list-toggle {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.28);
+    z-index: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .list-toggle:active { transform: translateX(-50%) scale(0.97); }
+
+  /* 목록 시트 (오버레이) */
+  #sheet-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(20,24,20,0.42);
+    z-index: 900;
+    display: none;
+    align-items: flex-end;
+  }
+  #sheet-overlay.show { display: flex; }
+  #sheet {
+    background: var(--surface);
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 70%;
+    display: flex;
+    flex-direction: column;
+  }
+  #sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 8px;
+    flex-shrink: 0;
+  }
+  #sheet-header span { font-size: 14.5px; font-weight: 800; color: var(--pine); }
+  #sheet-header .sheet-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  #sheet-header button {
+    border: none;
+    background: none;
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #sheet-header #sheet-close { font-size: 13px; }
+  #list-body { overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+
+  .place-card {
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    cursor: pointer;
+  }
+  .place-card:active { background: var(--amber-soft); }
+  .place-card .paw { font-size: 16px; margin-top: 2px; }
+  .place-card .body { flex: 1; min-width: 0; }
+  .place-card .name {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 3px;
+    color: var(--ink);
+  }
+  .place-card .meta {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin: 0;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-right: 5px;
+    margin-bottom: 3px;
+  }
+  .tag.free  { background: #EAF1EC; color: var(--pine); }
+  .tag.limit { background: var(--amber-soft); color: var(--amber); }
+  .tag.status-ok   { background: #EAF1EC; color: var(--pine-light); }
+  .tag.status-warn { background: #F7E1DC; color: #B0452B; }
+  .tag.perk { background: #EAF1EC; color: var(--pine-light); }
+  .fav-btn {
+    font-size: 17px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1;
+    padding: 2px;
+    color: var(--line);
+  }
+  .fav-btn.active { color: var(--heart); }
+
+  .empty-state {
+    padding: 26px 20px;
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* 제보 모달 */
+  #modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(20,24,20,0.42);
+    z-index: 1000;
+    display: none;
+    align-items: flex-end;
+  }
+  #modal-overlay.show { display: flex; }
+  #modal {
+    background: var(--surface);
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
+    max-height: 88%;
+    overflow-y: auto;
+  }
+  #modal h2 { font-size: 16px; margin: 0 0 2px; color: var(--pine); }
+  #modal .sub { font-size: 12px; color: var(--ink-muted); margin: 0 0 16px; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .field input[type=text], .field textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 14.5px;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .field textarea { resize: vertical; min-height: 56px; }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    cursor: pointer;
+  }
+  .chip.active { background: var(--pine); border-color: var(--pine); color: #fff; }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .toggle-row span { font-size: 13px; color: var(--ink); }
+  .toggle-switch {
+    width: 38px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--line);
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease;
+  }
+  .toggle-switch.on { background: var(--pine); }
+  .toggle-switch.on::after { transform: translateX(16px); }
+  .pin-status {
+    border: 1px dashed var(--line);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+  .pin-status.set { color: var(--pine); font-weight: 600; border-color: var(--pine-light); border-style: solid; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn {
+    flex: 1;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn.primary { background: var(--pine); color: #fff; }
+  .btn.primary:disabled { background: #B9C4BC; }
+  .btn.ghost { background: var(--bg); color: var(--ink-muted); border: 1px solid var(--line); }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    font-size: 13px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    z-index: 1200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  .custom-pin {
+    background: var(--pine);
+    width: 20px; height: 20px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  }
+  .custom-pin .pin-dot {
+    width: 7px; height: 7px;
+    background: #fff;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="header">
+    <div class="brand">
+      <span class="brand-mark">🐾</span>
+      <h1>같이가개</h1>
+    </div>
+    <span class="header-count" id="header-count">0곳</span>
+  </header>
+
+  <div id="filter-row">
+    <div class="fchip active" data-val="all">전체</div>
+    <div class="fchip" data-val="free">전 구역</div>
+    <div class="fchip" data-val="limit">일부 구역</div>
+    <div class="fchip" data-val="noRestriction">견종·체중 제한없음</div>
+    <div class="fchip" data-val="favorite">♥ 즐겨찾기</div>
+  </div>
+
+  <div id="region-row">
+    <select id="region-select">
+      <option value="all">전체 지역</option>
+    </select>
+  </div>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div class="map-hint" id="map-hint">지도를 눌러 위치를 지정하세요</div>
+    <button class="fab" id="fab-add" title="장소 제보하기">＋</button>
+    <button class="locate-btn" id="locate-btn" title="내 위치로 이동">📍</button>
+    <button class="list-toggle" id="list-toggle-btn">📋 목록보기 · <span id="list-toggle-count">0곳</span></button>
+  </div>
+
+  <div id="sheet-overlay">
+    <div id="sheet">
+      <div id="sheet-header">
+        <span>등록된 장소</span>
+        <div class="sheet-actions">
+          <button id="sort-toggle">최근확인일 오래된순</button>
+          <button id="sheet-close">닫기</button>
+        </div>
+      </div>
+      <div id="list-body"></div>
+    </div>
+  </div>
+
+  <div id="modal-overlay">
+    <div id="modal">
+      <h2>장소 제보하기</h2>
+      <p class="sub">제보 주신 정보는 검토 후 지도에 반영됩니다.</p>
+
+      <div class="field">
+        <label>지도 위치</label>
+        <div class="pin-status" id="pin-status">📍 아래 지도를 눌러 위치를 지정해 주세요</div>
+      </div>
+
+      <div class="field">
+        <label>상호명 / 장소명</label>
+        <input type="text" id="f-name" placeholder="예: 을지로 개풀카페" />
+      </div>
+
+      <div class="field">
+        <label>주소 (선택, 알고 계시면 적어주세요)</label>
+        <input type="text" id="f-address" placeholder="예: 서울 중구 을지로 123" />
+      </div>
+
+      <div class="field">
+        <label>동반 조건</label>
+        <div class="chip-row" id="condition-chips">
+          <div class="chip active" data-val="free">전 구역 동반 가능</div>
+          <div class="chip" data-val="limit">일부 구역만 (반려동물 전용구역 등)</div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <span>이동장/가방 없이 실내 동반 가능</span>
+        <div class="toggle-switch" id="toggle-carrier"></div>
+      </div>
+      <div class="toggle-row">
+        <span>견종·체중 제한 없음</span>
+        <div class="toggle-switch" id="toggle-restriction"></div>
+      </div>
+
+      <div class="field">
+        <label>비고 (크기 제한, 필요 서류 등)</label>
+        <textarea id="f-note" placeholder="예: 소형견만, 목줄/이동장 필수 등"></textarea>
+      </div>
+
+      <div class="field">
+        <label>연락처 (선택, 확인 필요 시에만 사용)</label>
+        <input type="text" id="f-contact" placeholder="선택 입력" />
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn ghost" id="btn-cancel">취소</button>
+        <button class="btn primary" id="btn-submit" disabled>제보하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbweuaW_Hdpk8u5MzaQxfOR4wRmDA8LSB-Isne5M4md0Piyke30_H7dAfGeiyRyBIi4m0Q/exec';
+  const FAVORITES_KEY = 'gachigagae_favorites';
+  const DEFAULT_CENTER = [37.5665, 126.9780];
+
+  let places = [];
+  let favorites = [];
+  let map, markersLayer;
+  let pendingPin = null;
+  let pendingMarker = null;
+  let pickingMode = false;
+  let currentFilter = 'all';
+  let currentRegion = 'all';
+  let sortByOldestChecked = false;
+  let carrierFree = false;
+  let noRestrictionOn = false;
+
+  const el = (id) => document.getElementById(id);
+  const toastEl = el('toast');
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 2200);
+  }
+
+  function loadFavorites() {
+    try {
+      favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+    } catch (e) {
+      favorites = [];
+    }
+  }
+
+  function saveFavorites() {
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    } catch (e) {
+      // 저장 안 되어도 세션 내에서는 정상 동작
+    }
+  }
+
+  function isFavorite(id) {
+    return favorites.includes(id);
+  }
+
+  function toggleFavorite(id) {
+    const i = favorites.indexOf(id);
+    if (i === -1) { favorites.push(id); } else { favorites.splice(i, 1); }
+    saveFavorites();
+    renderMarkers();
+    renderList();
+  }
+
+  function conditionLabel(val) {
+    if (val === 'limit') return { text: '일부 구역', cls: 'limit' };
+    return { text: '전 구역', cls: 'free' };
+  }
+
+  function statusLabel(val) {
+    if (val === '폐업의심') return { text: '⚠ 폐업의심', cls: 'status-warn' };
+    if (val === '정상') return { text: '정상', cls: 'status-ok' };
+    return null;
+  }
+
+  // 주소에서 시/도 + 구/군 단위만 추출 (예: "서울 중구 을지로 123" → "서울 중구")
+  function regionOf(address) {
+    if (!address) return '기타';
+    const parts = address.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0]} ${parts[1]}`;
+    return parts[0];
+  }
+
+  function placePinIcon() {
+    return L.divIcon({
+      className: '',
+      html: '<div class="custom-pin"><span class="pin-dot"></span></div>',
+      iconSize: [20, 20],
+      iconAnchor: [10, 19],
+    });
+  }
+
+  function filteredPlaces() {
+    return places.filter((p) => {
+      if (currentFilter === 'favorite' && !isFavorite(p.id)) return false;
+      if (currentFilter === 'noRestriction' && !p.noRestriction) return false;
+      if (['free', 'limit'].includes(currentFilter) && p.condition !== currentFilter) return false;
+      if (currentRegion !== 'all' && regionOf(p.address) !== currentRegion) return false;
+      return true;
+    });
+  }
+
+  function updateRegionOptions() {
+    const regions = Array.from(new Set(places.map(p => regionOf(p.address)))).sort();
+    const select = el('region-select');
+    const prev = select.value;
+    select.innerHTML = '<option value="all">전체 지역</option>' +
+      regions.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+    select.value = regions.includes(prev) ? prev : 'all';
+  }
+
+  function initMap() {
+    map = L.map('map', { zoomControl: false }).setView(DEFAULT_CENTER, 12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    }).addTo(map);
+    markersLayer = L.layerGroup().addTo(map);
+
+    map.on('click', (e) => {
+      if (!pickingMode) return;
+      setPendingPin(e.latlng.lat, e.latlng.lng);
+    });
+
+    map.whenReady(() => setTimeout(() => map.invalidateSize(), 200));
+  }
+
+  function setPendingPin(lat, lng) {
+    pendingPin = { lat, lng };
+    if (pendingMarker) map.removeLayer(pendingMarker);
+    pendingMarker = L.marker([lat, lng], { icon: placePinIcon() }).addTo(map);
+    el('pin-status').classList.add('set');
+    el('pin-status').textContent = `📍 위치 지정됨 (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+    checkSubmitEnabled();
+    el('map-hint').textContent = '다시 누르면 위치를 변경할 수 있어요';
+  }
+
+  function perkTags(p) {
+    let html = '';
+    if (p.noCarrier) html += `<span class="tag perk">이동장 불필요</span>`;
+    if (p.noRestriction) html += `<span class="tag perk">제한없음</span>`;
+    return html;
+  }
+
+  function renderMarkers() {
+    markersLayer.clearLayers();
+    filteredPlaces().forEach((p) => {
+      const marker = L.marker([p.lat, p.lng], { icon: placePinIcon() });
+      const cond = conditionLabel(p.condition);
+      const status = statusLabel(p.status);
+      marker.bindPopup(
+        `<strong>${escapeHtml(p.name)}</strong>` +
+        (status ? ` <span class="tag ${status.cls}">${status.text}</span>` : '') +
+        `<br/><span style="color:#7A8078;font-size:12px;">${cond.text}</span>` +
+        `<div style="margin-top:4px;">${perkTags(p)}</div>` +
+        (p.note ? `<div style="margin-top:4px;font-size:12.5px;">${escapeHtml(p.note)}</div>` : '')
+      );
+      marker.addTo(markersLayer);
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderList() {
+    const list = filteredPlaces();
+    el('header-count').textContent = `${places.length}곳`;
+    el('list-toggle-count').textContent = `${list.length}곳`;
+    const body = el('list-body');
+    if (list.length === 0) {
+      body.innerHTML = '<div class="empty-state">해당 조건의 장소가 아직 없어요.</div>';
+      return;
+    }
+    const sorted = sortByOldestChecked
+      ? [...list].sort((a, b) => {
+          const av = a.lastChecked ? new Date(a.lastChecked).getTime() : -Infinity;
+          const bv = b.lastChecked ? new Date(b.lastChecked).getTime() : -Infinity;
+          return av - bv;
+        })
+      : [...list];
+    body.innerHTML = '';
+    sorted.forEach((p) => {
+      const cond = conditionLabel(p.condition);
+      const status = statusLabel(p.status);
+      const card = document.createElement('div');
+      card.className = 'place-card';
+      card.innerHTML = `
+        <span class="paw">🐾</span>
+        <div class="body">
+          <p class="name">${escapeHtml(p.name)}</p>
+          <p class="meta">
+            <span class="tag ${cond.cls}">${cond.text}</span>${status ? `<span class="tag ${status.cls}">${status.text}</span>` : ''}${perkTags(p)}<br/>${p.note ? escapeHtml(p.note) : ''}
+          </p>
+        </div>
+        <button class="fav-btn ${isFavorite(p.id) ? 'active' : ''}" data-id="${p.id}">${isFavorite(p.id) ? '♥' : '♡'}</button>
+      `;
+      card.querySelector('.body').addEventListener('click', () => {
+        map.setView([p.lat, p.lng], 16, { animate: true });
+        const found = markersLayer.getLayers().find(m => {
+          const ll = m.getLatLng();
+          return ll.lat === p.lat && ll.lng === p.lng;
+        });
+        if (found) found.openPopup();
+      });
+      const favBtn = card.querySelector('.fav-btn');
+      favBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        toggleFavorite(p.id);
+      });
+      body.appendChild(card);
+    });
+  }
+
+  async function loadPlaces() {
+    try {
+      const res = await fetch(SHEET_API_URL);
+      if (!res.ok) throw new Error('sheet fetch failed');
+      places = await res.json();
+    } catch (e) {
+      showToast('구글 시트에서 데이터를 불러오지 못했어요.');
+      places = [];
+    }
+    updateRegionOptions();
+    renderMarkers();
+    renderList();
+  }
+
+  // ---- Modal control (공개 제보 폼) ----
+  function openModal() {
+    pendingPin = null;
+    if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
+    el('f-name').value = '';
+    el('f-address').value = '';
+    el('f-note').value = '';
+    el('f-contact').value = '';
+    carrierFree = false;
+    noRestrictionOn = false;
+    el('toggle-carrier').classList.remove('on');
+    el('toggle-restriction').classList.remove('on');
+    document.querySelectorAll('#condition-chips .chip').forEach(c => c.classList.remove('active'));
+    document.querySelector('#condition-chips .chip[data-val="free"]').classList.add('active');
+    el('pin-status').classList.remove('set');
+    el('pin-status').textContent = '📍 아래 지도를 눌러 위치를 지정해 주세요';
+    el('btn-submit').disabled = true;
+    pickingMode = true;
+    el('map-hint').textContent = '지도를 눌러 위치를 지정하세요';
+    el('map-hint').classList.add('show');
+    el('modal-overlay').classList.add('show');
+  }
+
+  function closeModal() {
+    el('modal-overlay').classList.remove('show');
+    pickingMode = false;
+    el('map-hint').classList.remove('show');
+  }
+
+  function selectedCondition() {
+    const active = document.querySelector('#condition-chips .chip.active');
+    return active ? active.dataset.val : 'free';
+  }
+
+  function checkSubmitEnabled() {
+    el('btn-submit').disabled = !(el('f-name').value.trim() && pendingPin);
+  }
+
+  async function submitReport() {
+    const name = el('f-name').value.trim();
+    if (!name || !pendingPin) return;
+    if (!noRestrictionOn) {
+      showToast('견종·체중 제한이 있는 곳은 등록할 수 없어요 🙏');
+      return;
+    }
+    const payload = {
+      name,
+      address: el('f-address').value.trim(),
+      lat: pendingPin.lat,
+      lng: pendingPin.lng,
+      condition: selectedCondition(),
+      noCarrier: carrierFree,
+      noRestriction: noRestrictionOn,
+      note: el('f-note').value.trim(),
+      contact: el('f-contact').value.trim(),
+    };
+    el('btn-submit').disabled = true;
+    el('btn-submit').textContent = '제출 중...';
+    try {
+      await fetch(SHEET_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+      closeModal();
+      showToast('제보 감사합니다! 검토 후 지도에 반영될게요 🐾');
+    } catch (e) {
+      showToast('제보 접수에 실패했어요. 다시 시도해 주세요.');
+    }
+    el('btn-submit').disabled = false;
+    el('btn-submit').textContent = '제보하기';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadFavorites();
+    initMap();
+    loadPlaces();
+
+    el('fab-add').addEventListener('click', openModal);
+    el('btn-cancel').addEventListener('click', closeModal);
+    el('btn-submit').addEventListener('click', submitReport);
+    el('f-name').addEventListener('input', checkSubmitEnabled);
+
+    el('toggle-carrier').addEventListener('click', () => {
+      carrierFree = !carrierFree;
+      el('toggle-carrier').classList.toggle('on', carrierFree);
+    });
+    el('toggle-restriction').addEventListener('click', () => {
+      noRestrictionOn = !noRestrictionOn;
+      el('toggle-restriction').classList.toggle('on', noRestrictionOn);
+    });
+
+    document.querySelectorAll('#condition-chips .chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#condition-chips .chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('#filter-row .fchip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#filter-row .fchip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        currentFilter = chip.dataset.val;
+        renderMarkers();
+        renderList();
+      });
+    });
+
+    el('region-select').addEventListener('change', (e) => {
+      currentRegion = e.target.value;
+      renderMarkers();
+      renderList();
+    });
+
+    el('list-toggle-btn').addEventListener('click', () => {
+      el('sheet-overlay').classList.add('show');
+    });
+    el('sheet-close').addEventListener('click', () => {
+      el('sheet-overlay').classList.remove('show');
+    });
+    el('sort-toggle').addEventListener('click', () => {
+      sortByOldestChecked = !sortByOldestChecked;
+      el('sort-toggle').textContent = sortByOldestChecked ? '기본순' : '최근확인일 오래된순';
+      renderList();
+    });
+    el('sheet-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'sheet-overlay') el('sheet-overlay').classList.remove('show');
+    });
+
+    el('locate-btn').addEventListener('click', () => {
+      if (!navigator.geolocation) { showToast('위치 정보를 사용할 수 없어요.'); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 15),
+        () => showToast('위치 권한이 필요해요.')
+      );
+    });
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 13),
+        () => {}
+      );
+    }
+  });
+})();
+</script>
+</body>
+</html>
