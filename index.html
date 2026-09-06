@@ -313,6 +313,15 @@
   }
   #modal h2 { font-size: 16px; margin: 0 0 2px; color: var(--pine); }
   #modal .sub { font-size: 12px; color: var(--ink-muted); margin: 0 0 16px; }
+  #modal .notice {
+    font-size: 12.5px;
+    color: var(--pine);
+    background: rgba(44, 74, 62, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
   .field { margin-bottom: 14px; }
   .field label {
     display: block;
@@ -344,36 +353,6 @@
     cursor: pointer;
   }
   .chip.active { background: var(--pine); border-color: var(--pine); color: #fff; }
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    margin-bottom: 10px;
-  }
-  .toggle-row span { font-size: 13px; color: var(--ink); }
-  .toggle-switch {
-    width: 38px;
-    height: 22px;
-    border-radius: 999px;
-    background: var(--line);
-    position: relative;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  .toggle-switch::after {
-    content: '';
-    position: absolute;
-    top: 2px; left: 2px;
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.15s ease;
-  }
-  .toggle-switch.on { background: var(--pine); }
-  .toggle-switch.on::after { transform: translateX(16px); }
   .pin-status {
     border: 1px dashed var(--line);
     border-radius: var(--radius-sm);
@@ -478,6 +457,7 @@
     <div id="modal">
       <h2>장소 제보하기</h2>
       <p class="sub">제보 주신 정보는 검토 후 지도에 반영됩니다.</p>
+      <p class="notice">🐾 <strong>이동장·가방 없이 동반 가능</strong>하고 <strong>견종·체중 제한이 없는 곳</strong>만 등록하고 있어요. 조건에 맞지 않으면 반영이 어려울 수 있어요.</p>
 
       <div class="field">
         <label>지도 위치</label>
@@ -502,18 +482,9 @@
         </div>
       </div>
 
-      <div class="toggle-row">
-        <span>이동장/가방 없이 실내 동반 가능</span>
-        <div class="toggle-switch" id="toggle-carrier"></div>
-      </div>
-      <div class="toggle-row">
-        <span>견종·체중 제한 없음</span>
-        <div class="toggle-switch" id="toggle-restriction"></div>
-      </div>
-
       <div class="field">
-        <label>비고 (크기 제한, 필요 서류 등)</label>
-        <textarea id="f-note" placeholder="예: 소형견만, 목줄/이동장 필수 등"></textarea>
+        <label>비고 (선택)</label>
+        <textarea id="f-note" placeholder="예: 실내 전 구역 동반 가능, 소형~대형견 모두 환영"></textarea>
       </div>
 
       <div class="field">
@@ -559,8 +530,6 @@
     '제주특별자치도': '제주',
   };
   let sortByOldestChecked = false;
-  let carrierFree = false;
-  let noRestrictionOn = false;
 
   const el = (id) => document.getElementById(id);
   const toastEl = el('toast');
@@ -776,9 +745,10 @@
     el('map-hint').textContent = '다시 누르면 위치를 변경할 수 있어요';
   }
 
-  function perkTags(p) {
-    // 견종·체중 제한없음은 등록 조건상 모든 장소의 기본값이라 배지로 반복 표시하지 않습니다.
-    return p.noCarrier ? `<span class="tag perk">이동장 불필요</span>` : '';
+  function perkTags() {
+    // 견종·체중 제한없음, 이동장·개모차 불필요는 등록 조건상 모든 장소의 기본값이라
+    // 배지로 반복 표시하지 않습니다.
+    return '';
   }
 
   function popupContent(p) {
@@ -891,10 +861,6 @@
     el('f-address').value = '';
     el('f-note').value = '';
     el('f-contact').value = '';
-    carrierFree = false;
-    noRestrictionOn = false;
-    el('toggle-carrier').classList.remove('on');
-    el('toggle-restriction').classList.remove('on');
     document.querySelectorAll('#condition-chips .chip').forEach(c => c.classList.remove('active'));
     document.querySelector('#condition-chips .chip[data-val="free"]').classList.add('active');
     el('pin-status').classList.remove('set');
@@ -924,18 +890,16 @@
   async function submitReport() {
     const name = el('f-name').value.trim();
     if (!name || !pendingPin) return;
-    if (!noRestrictionOn) {
-      showToast('견종·체중 제한이 있는 곳은 등록할 수 없어요 🙏');
-      return;
-    }
+    // 이동장·가방 없이 동반 가능 + 견종·체중 제한 없음은 모달 상단 안내문으로
+    // 사전 고지하고, 실제로 만족하는지는 검토 단계에서 확인합니다(입력창 없이 항상 true로 전송).
     const payload = {
       name,
       address: el('f-address').value.trim(),
       lat: pendingPin.lat,
       lng: pendingPin.lng,
       condition: selectedCondition(),
-      noCarrier: carrierFree,
-      noRestriction: noRestrictionOn,
+      noCarrier: true,
+      noRestriction: true,
       note: el('f-note').value.trim(),
       contact: el('f-contact').value.trim(),
     };
@@ -965,15 +929,6 @@
     el('btn-cancel').addEventListener('click', closeModal);
     el('btn-submit').addEventListener('click', submitReport);
     el('f-name').addEventListener('input', checkSubmitEnabled);
-
-    el('toggle-carrier').addEventListener('click', () => {
-      carrierFree = !carrierFree;
-      el('toggle-carrier').classList.toggle('on', carrierFree);
-    });
-    el('toggle-restriction').addEventListener('click', () => {
-      noRestrictionOn = !noRestrictionOn;
-      el('toggle-restriction').classList.toggle('on', noRestrictionOn);
-    });
 
     document.querySelectorAll('#condition-chips .chip').forEach((chip) => {
       chip.addEventListener('click', () => {
