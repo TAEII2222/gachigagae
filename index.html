@@ -1330,7 +1330,7 @@
     document.querySelectorAll('#condition-chips .chip').forEach(c => c.classList.remove('active'));
     document.querySelector('#condition-chips .chip[data-val="free"]').classList.add('active');
     el('pin-status').classList.remove('set');
-    el('pin-status').textContent = '📍 아래 지도를 눌러 위치를 지정해 주세요';
+    el('pin-status').textContent = '📍 위쪽 지도를 눌러 위치를 지정해 주세요';
     el('btn-submit').disabled = true;
     el('btn-submit').textContent = '제보하기'; // 직전 제출이 중간에 끝났어도 라벨을 되돌린다
     el('modal-overlay').classList.add('show');
