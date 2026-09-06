@@ -96,7 +96,39 @@
     align-items: center;
     gap: 7px;
   }
-  .brand-mark { font-size: 18px; line-height: 1; }
+  .brand-mark { width: 26px; height: 26px; display: block; flex-shrink: 0; }
+
+  /* 로딩 — 귀리가 통통 뛰면서 기다리게 한다 */
+  #loading {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    z-index: 700;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transition: opacity 0.35s ease;
+  }
+  #loading[hidden] { display: none; }
+  #loading.fade { opacity: 0; pointer-events: none; }
+  #loading p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-muted);
+  }
+  .loading-guri {
+    width: 78px;
+    height: 78px;
+    animation: guri-hop 1s cubic-bezier(0.35, 0.8, 0.4, 1) infinite;
+  }
+  @keyframes guri-hop {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50%      { transform: translateY(-13px) rotate(3deg); }
+  }
+  .empty-guri { width: 62px; height: 62px; margin: 0 auto 10px; display: block; }
   h1 {
     font-size: 16.5px;
     font-weight: 800;
@@ -665,11 +697,39 @@
 </style>
 </head>
 <body>
+
+<!-- 마스코트 '귀리' — 사진을 보고 단순화한 일러스트.
+     로딩·빈 화면·브랜드 마크에서 <use>로 재사용한다. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="guri" viewBox="0 0 100 100">
+    <!-- 귀 -->
+    <path d="M18 40 C14 22 17 11 21 9 c5-2 15 9 21 20z" fill="#E3A468"/>
+    <path d="M82 40 C86 22 83 11 79 9 c-5-2-15 9-21 20z" fill="#E3A468"/>
+    <path d="M23 35 C21 24 23 16 25 15 c3-1 9 6 13 15z" fill="#F6D9BC"/>
+    <path d="M77 35 C79 24 77 16 75 15 c-3-1-9 6-13 15z" fill="#F6D9BC"/>
+    <!-- 얼굴 -->
+    <path d="M50 20 C74 20 87 36 87 56 C87 78 71 92 50 92 C29 92 13 78 13 56 C13 36 26 20 50 20z" fill="#FBF3E7"/>
+    <!-- 이마 쪽 크림색 결 -->
+    <path d="M50 20 C68 20 80 32 83 47 C74 36 63 31 50 31 C37 31 26 36 17 47 C20 32 32 20 50 20z" fill="#EFD3AE"/>
+    <!-- 눈 -->
+    <ellipse cx="36" cy="53" rx="5.4" ry="6.2" fill="#2E2018"/>
+    <ellipse cx="64" cy="53" rx="5.4" ry="6.2" fill="#2E2018"/>
+    <circle cx="37.8" cy="50.6" r="1.9" fill="#fff"/>
+    <circle cx="65.8" cy="50.6" r="1.9" fill="#fff"/>
+    <!-- 코 -->
+    <path d="M50 63 c5 0 7.5 2.2 7.5 4.6 C57.5 70.4 54 73 50 73 c-4 0-7.5-2.6-7.5-5.4 C42.5 65.2 45 63 50 63z" fill="#4A2E22"/>
+    <!-- 입 + 혀 -->
+    <path d="M50 73 v3" stroke="#4A2E22" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M39 77 c4 7 18 7 22 0 c-1 8-8 12-11 12 c-3 0-10-4-11-12z" fill="#3A2018"/>
+    <path d="M44 82 c2 5 10 5 12 0 c0 6-3 8-6 8 c-3 0-6-2-6-8z" fill="#FF9BAE"/>
+  </symbol>
+</svg>
+
 <div id="app">
 
   <header id="header">
     <div class="brand">
-      <span class="brand-mark">🐾</span>
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><use href="#guri"/></svg>
       <h1>같이가개</h1>
     </div>
     <span class="header-count" id="header-count">0곳</span>
@@ -694,6 +754,13 @@
 
   <div id="map-wrap">
     <div id="map"></div>
+
+    <!-- 로딩 상태. 예전엔 이게 없어서 시트를 불러오는 동안 빈 지도에 "0곳"이 떠서
+         "등록된 곳이 없는 앱"처럼 보였다. -->
+    <div id="loading">
+      <svg class="loading-guri" viewBox="0 0 100 100" aria-hidden="true"><use href="#guri"/></svg>
+      <p>귀리가 장소를 물어오는 중…</p>
+    </div>
     <button class="fab" id="fab-add" title="장소 제보하기">＋</button>
     <button class="locate-btn" id="locate-btn" title="내 위치로 이동">📍</button>
     <button class="list-toggle" id="list-toggle-btn">📋 목록보기 · <span class="cnt" id="list-toggle-count">0곳</span></button>
@@ -1176,9 +1243,10 @@
     const body = el('list-body');
     if (list.length === 0) {
       // 검색 때문에 빈 건지, 원래 없는 건지 구분해서 알려준다
+      const guri = '<svg class="empty-guri" viewBox="0 0 100 100" aria-hidden="true"><use href="#guri"/></svg>';
       body.innerHTML = searchQuery.trim()
-        ? `<div class="empty-state">🐾<br/><strong>“${escapeHtml(searchQuery.trim())}”</strong> 검색 결과가 없어요.<br/>다른 이름이나 동네로 찾아보세요.</div>`
-        : '<div class="empty-state">🐾<br/>해당 조건의 장소가 아직 없어요.</div>';
+        ? `<div class="empty-state">${guri}<strong>“${escapeHtml(searchQuery.trim())}”</strong> 검색 결과가 없어요.<br/>다른 이름이나 동네로 찾아보세요.</div>`
+        : `<div class="empty-state">${guri}해당 조건의 장소가 아직 없어요.</div>`;
       return;
     }
     const sorted = sortByOldestChecked
@@ -1242,6 +1310,14 @@
     updateRegionOptions();
     renderMarkers();
     renderList();
+    hideLoading();
+  }
+
+  function hideLoading() {
+    const l = el('loading');
+    if (!l || l.hidden) return;
+    l.classList.add('fade');
+    setTimeout(() => { l.hidden = true; }, 380);
   }
 
   // ---- Modal control (공개 제보 폼) ----
