@@ -94,20 +94,99 @@
   }
   .fchip.active { background: var(--pine); border-color: var(--pine); color: #fff; }
 
-  /* Region chips rows — 시/도 선택 후 구/군 선택 (대분류→소분류 드릴다운) */
-  #sido-row, #gu-row {
-    display: flex;
-    gap: 8px;
-    padding: 8px 14px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--line);
-    overflow-x: auto;
+  /* 지역 필터 버튼 — 칩 줄을 지도 위에서 걷어내고 버튼 하나로 접었다 */
+  #region-btn {
     flex-shrink: 0;
-    scrollbar-width: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 6px 13px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
   }
-  #sido-row::-webkit-scrollbar, #gu-row::-webkit-scrollbar { display: none; }
-  #gu-row { padding-top: 0; border-top: 1px dashed var(--line); }
-  #gu-row[hidden] { display: none; }
+  #region-btn.active { background: var(--pine); border-color: var(--pine); color: #fff; }
+  #region-btn .caret { font-size: 9px; opacity: 0.7; }
+  /* 조건 칩과 지역 버튼 사이 구분선 */
+  #filter-row .divider {
+    flex-shrink: 0;
+    width: 1px;
+    background: var(--line);
+    margin: 2px 2px;
+  }
+
+  /* 지역 선택 바텀시트 — 시/도 → 구/군 드릴다운 (칩이 가로 스크롤 대신 줄바꿈됨) */
+  #region-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(20,24,20,0.42);
+    z-index: 950;
+    display: none;
+    align-items: flex-end;
+  }
+  #region-overlay.show { display: flex; }
+  #region-sheet {
+    background: var(--surface);
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 75%;
+    display: flex;
+    flex-direction: column;
+  }
+  #region-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 8px;
+    flex-shrink: 0;
+  }
+  #region-header > span { font-size: 14.5px; font-weight: 800; color: var(--pine); }
+  #region-header .sheet-actions { display: flex; align-items: center; gap: 12px; }
+  #region-header button {
+    border: none;
+    background: none;
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  #region-header #region-close { font-size: 13px; }
+  #region-body { overflow-y: auto; padding: 4px 18px 8px; }
+  .region-group { margin-bottom: 16px; }
+  .region-group[hidden] { display: none; }
+  .region-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ink-muted);
+    margin: 0 0 8px;
+    letter-spacing: 0.02em;
+  }
+  .region-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  #region-footer {
+    flex-shrink: 0;
+    padding: 10px 18px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+  }
+  #region-apply {
+    width: 100%;
+    border: none;
+    background: var(--pine);
+    color: #fff;
+    border-radius: 12px;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
 
   /* Map — 겹치는 요소 최소화 */
   #map-wrap {
@@ -421,16 +500,13 @@
   </header>
 
   <div id="filter-row">
+    <button id="region-btn"><span id="region-btn-label">지역</span><span class="caret">▼</span></button>
+    <div class="divider"></div>
     <div class="fchip active" data-val="all">전체</div>
-    <div class="fchip" data-val="free">전 구역 입장 가능</div>
-    <div class="fchip" data-val="limit">일부 구역만 가능</div>
+    <div class="fchip" data-val="free">전 구역 동반 가능</div>
+    <div class="fchip" data-val="limit">일부 구역만</div>
     <div class="fchip" data-val="favorite">♥ 즐겨찾기</div>
   </div>
-
-  <div id="sido-row">
-    <div class="fchip active" data-sido="all">전체 지역</div>
-  </div>
-  <div id="gu-row" hidden></div>
 
   <div id="map-wrap">
     <div id="map"></div>
@@ -450,6 +526,33 @@
         </div>
       </div>
       <div id="list-body"></div>
+    </div>
+  </div>
+
+  <div id="region-overlay">
+    <div id="region-sheet">
+      <div id="region-header">
+        <span>지역 선택</span>
+        <div class="sheet-actions">
+          <button id="region-reset">초기화</button>
+          <button id="region-close">닫기</button>
+        </div>
+      </div>
+      <div id="region-body">
+        <div class="region-group">
+          <div class="region-label">시 / 도</div>
+          <div class="region-chips" id="sido-chips">
+            <div class="fchip active" data-sido="all">전체 지역</div>
+          </div>
+        </div>
+        <div class="region-group" id="gu-group" hidden>
+          <div class="region-label">구 / 군</div>
+          <div class="region-chips" id="gu-chips"></div>
+        </div>
+      </div>
+      <div id="region-footer">
+        <button id="region-apply">전체 보기</button>
+      </div>
     </div>
   </div>
 
@@ -569,8 +672,8 @@
   }
 
   function conditionLabel(val) {
-    if (val === 'limit') return { text: '일부 구역만 가능', cls: 'limit' };
-    return { text: '전 구역 입장 가능', cls: 'free' };
+    if (val === 'limit') return { text: '일부 구역만', cls: 'limit' };
+    return { text: '전 구역 동반 가능', cls: 'free' };
   }
 
   function statusLabel(val) {
@@ -621,10 +724,10 @@
     });
   }
 
-  // 대분류(시/도) 칩 목록을 그린다
+  // 대분류(시/도) 칩 목록을 그린다 — 지역 선택 바텀시트 안에 렌더링
   function updateRegionOptions() {
     const sidos = Array.from(new Set(places.map(p => regionParts(p.address).sido))).sort();
-    const row = el('sido-row');
+    const row = el('sido-chips');
     row.querySelectorAll('.fchip[data-sido]:not([data-sido="all"])').forEach(c => c.remove());
     sidos.forEach((s) => {
       const chip = document.createElement('div');
@@ -636,38 +739,39 @@
     bindSidoChips();
     updateSidoChipState();
     renderGuRow();
+    updateRegionBtn();
   }
 
   function updateSidoChipState() {
-    el('sido-row').querySelectorAll('.fchip').forEach((c) => {
+    el('sido-chips').querySelectorAll('.fchip').forEach((c) => {
       const isAll = c.dataset.sido === 'all';
       c.classList.toggle('active', isAll ? !selectedSido : c.dataset.sido === selectedSido);
     });
   }
 
   function bindSidoChips() {
-    el('sido-row').querySelectorAll('.fchip').forEach((chip) => {
+    el('sido-chips').querySelectorAll('.fchip').forEach((chip) => {
       chip.onclick = () => {
         const s = chip.dataset.sido;
         selectedSido = (s === 'all') ? null : s;
         selectedGus.clear();
         updateSidoChipState();
         renderGuRow();
-        renderMarkers();
-        renderList();
+        applyRegionChange();
       };
     });
   }
 
   // 소분류(구/군) 칩 목록 — 선택된 시/도가 있을 때만 노출 (대분류 → 소분류 드릴다운)
   function renderGuRow() {
-    const guRow = el('gu-row');
-    guRow.innerHTML = '';
+    const guGroup = el('gu-group');
+    const guChips = el('gu-chips');
+    guChips.innerHTML = '';
     if (!selectedSido) {
-      guRow.hidden = true;
+      guGroup.hidden = true;
       return;
     }
-    guRow.hidden = false;
+    guGroup.hidden = false;
     const gus = Array.from(new Set(
       places
         .filter(p => regionParts(p.address).sido === selectedSido)
@@ -679,7 +783,7 @@
     allChip.className = 'fchip active';
     allChip.dataset.gu = 'all';
     allChip.textContent = `${selectedSido} 전체`;
-    guRow.appendChild(allChip);
+    guChips.appendChild(allChip);
 
     gus.forEach((g) => {
       const chip = document.createElement('div');
@@ -687,19 +791,19 @@
       chip.dataset.gu = g;
       chip.textContent = g;
       if (selectedGus.has(g)) chip.classList.add('active');
-      guRow.appendChild(chip);
+      guChips.appendChild(chip);
     });
     bindGuChips();
     updateGuAllChipState();
   }
 
   function updateGuAllChipState() {
-    const allChip = el('gu-row').querySelector('.fchip[data-gu="all"]');
+    const allChip = el('gu-chips').querySelector('.fchip[data-gu="all"]');
     if (allChip) allChip.classList.toggle('active', selectedGus.size === 0);
   }
 
   function bindGuChips() {
-    el('gu-row').querySelectorAll('.fchip').forEach((chip) => {
+    el('gu-chips').querySelectorAll('.fchip').forEach((chip) => {
       chip.onclick = () => {
         const g = chip.dataset.gu;
         if (g === 'all') {
@@ -707,13 +811,50 @@
         } else {
           if (selectedGus.has(g)) selectedGus.delete(g); else selectedGus.add(g);
         }
-        el('gu-row').querySelectorAll('.fchip[data-gu]:not([data-gu="all"])')
+        el('gu-chips').querySelectorAll('.fchip[data-gu]:not([data-gu="all"])')
           .forEach(c => c.classList.toggle('active', selectedGus.has(c.dataset.gu)));
         updateGuAllChipState();
-        renderMarkers();
-        renderList();
+        applyRegionChange();
       };
     });
+  }
+
+  // 지역 선택이 바뀔 때마다 지도·목록·버튼 라벨을 함께 갱신한다
+  function applyRegionChange() {
+    renderMarkers();
+    renderList();
+    updateRegionBtn();
+  }
+
+  // 시트를 열지 않아도 지금 어떤 지역이 걸려 있는지 버튼만 보고 알 수 있게 한다
+  function updateRegionBtn() {
+    const btn = el('region-btn');
+    const label = el('region-btn-label');
+    const gus = Array.from(selectedGus);
+    if (!selectedSido) {
+      label.textContent = '지역';
+      btn.classList.remove('active');
+    } else if (gus.length === 0) {
+      label.textContent = selectedSido;
+      btn.classList.add('active');
+    } else if (gus.length === 1) {
+      label.textContent = gus[0];
+      btn.classList.add('active');
+    } else {
+      label.textContent = `${gus[0]} 외 ${gus.length - 1}`;
+      btn.classList.add('active');
+    }
+    const applyBtn = el('region-apply');
+    if (applyBtn) applyBtn.textContent = `${filteredPlaces().length}곳 보기`;
+  }
+
+  function openRegionSheet() {
+    updateRegionBtn();
+    el('region-overlay').classList.add('show');
+  }
+
+  function closeRegionSheet() {
+    el('region-overlay').classList.remove('show');
   }
 
   function initMap() {
@@ -960,6 +1101,20 @@
     });
     el('sheet-overlay').addEventListener('click', (e) => {
       if (e.target.id === 'sheet-overlay') el('sheet-overlay').classList.remove('show');
+    });
+
+    el('region-btn').addEventListener('click', openRegionSheet);
+    el('region-close').addEventListener('click', closeRegionSheet);
+    el('region-apply').addEventListener('click', closeRegionSheet);
+    el('region-reset').addEventListener('click', () => {
+      selectedSido = null;
+      selectedGus.clear();
+      updateSidoChipState();
+      renderGuRow();
+      applyRegionChange();
+    });
+    el('region-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'region-overlay') closeRegionSheet();
     });
 
     el('locate-btn').addEventListener('click', () => {
