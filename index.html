@@ -932,7 +932,8 @@
 
   function renderList() {
     const list = filteredPlaces();
-    el('header-count').textContent = `${places.length}곳`;
+    // 헤더 카운트도 필터 결과를 따라간다 (전체 등록 수가 아니라 지금 지도에 보이는 수)
+    el('header-count').textContent = `${list.length}곳`;
     el('list-toggle-count').textContent = `${list.length}곳`;
     const body = el('list-body');
     if (list.length === 0) {
