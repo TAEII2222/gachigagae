@@ -373,22 +373,27 @@
   }
 
   /* 제보 모달 */
+  /* 제보 모달은 바텀시트. 위치 지정을 하려면 뒤의 지도를 눌러야 하므로
+     오버레이는 클릭을 통과시키고(pointer-events:none), 시트만 입력을 받는다.
+     어둡게 덮으면 지도가 비활성처럼 보여서 배경 딤도 두지 않는다. */
   #modal-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(20,24,20,0.42);
     z-index: 1000;
     display: none;
     align-items: flex-end;
+    pointer-events: none;
   }
   #modal-overlay.show { display: flex; }
   #modal {
+    pointer-events: auto;
     background: var(--surface);
     width: 100%;
     border-radius: 20px 20px 0 0;
     padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
-    max-height: 88%;
+    max-height: 62%; /* 위쪽에 지도를 남겨서 핀을 찍을 수 있게 한다 */
     overflow-y: auto;
+    box-shadow: 0 -8px 24px rgba(20, 24, 20, 0.18);
   }
   #modal h2 { font-size: 16px; margin: 0 0 2px; color: var(--pine); }
   #modal .sub { font-size: 12px; color: var(--ink-muted); margin: 0 0 16px; }
@@ -1041,6 +1046,7 @@
     el('map-hint').textContent = '지도를 눌러 위치를 지정하세요';
     el('map-hint').classList.add('show');
     el('modal-overlay').classList.add('show');
+    el('modal').scrollTop = 0; // 시트가 스크롤된 채로 다시 열리지 않도록
   }
 
   function closeModal() {
