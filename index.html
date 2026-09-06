@@ -282,21 +282,6 @@
   }
   #map { width: 100%; height: 100%; background: #EDEBE3; }
 
-  .map-hint {
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(30,36,30,0.9);
-    color: #fff;
-    font-size: 12.5px;
-    padding: 8px 14px;
-    border-radius: 999px;
-    z-index: 500;
-    display: none;
-    white-space: nowrap;
-  }
-  .map-hint.show { display: block; }
 
   .locate-btn {
     position: absolute;
@@ -498,50 +483,33 @@
   }
 
   /* 제보 모달 */
-  /* 제보 모달은 바텀시트. 위치 지정을 하려면 뒤의 지도를 눌러야 하므로
-     오버레이는 클릭을 통과시키고(pointer-events:none), 시트만 입력을 받는다.
-     어둡게 덮으면 지도가 비활성처럼 보여서 배경 딤도 두지 않는다. */
+  /* 제보 모달 — 주소만 입력받으므로 평범한 바텀시트로 둔다.
+     (지도에 핀을 찍는 방식은 좁은 화면에서 정확히 찍기 어려워 걷어냈다.
+      주소는 서버가 지오코딩해서 좌표를 채운다.) */
   #modal-overlay {
     position: absolute;
     inset: 0;
+    background: rgba(70, 45, 20, 0.38);
     z-index: 1000;
     display: none;
     align-items: flex-end;
-    pointer-events: none;
   }
   #modal-overlay.show { display: flex; }
   #modal {
-    pointer-events: auto;
     background: var(--surface);
     width: 100%;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
-    max-height: 62%;
+    max-height: 88%;
     overflow-y: auto;
     box-shadow: 0 -8px 24px rgba(120, 80, 30, 0.18);
-    transition: max-height 0.3s cubic-bezier(0.3, 0.9, 0.4, 1);
   }
-  /* 위치를 잡는 동안에는 시트를 접어서 지도를 크게 쓴다.
-     좁은 띠에서는 정확히 찍을 수 없기 때문. */
-  #modal.picking { max-height: 30%; }
-  #modal.picking #modal-form,
-  #modal.picking .modal-actions .btn.primary { display: none; }
-  #modal.picking .sub,
-  #modal.picking .notice { display: none; }
-
-  #btn-repick {
-    margin-top: 8px;
-    border: 1.5px solid var(--line);
-    background: var(--surface);
-    color: var(--brand-deep);
-    border-radius: 999px;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
+  .field-hint {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    margin: 6px 0 0;
+    line-height: 1.45;
   }
-  #btn-repick[hidden] { display: none; }
   #modal h2 { font-size: 16px; margin: 0 0 2px; color: var(--pine); }
   #modal .sub { font-size: 12px; color: var(--ink-muted); margin: 0 0 16px; }
   #modal .notice {
@@ -584,14 +552,6 @@
     cursor: pointer;
   }
   .chip.active { background: var(--pine); border-color: var(--pine); color: #fff; }
-  .pin-status {
-    border: 1px dashed var(--line);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    font-size: 12.5px;
-    color: var(--ink-muted);
-  }
-  .pin-status.set { color: var(--pine); font-weight: 600; border-color: var(--pine-light); border-style: solid; }
   .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
   .btn {
     flex: 1;
@@ -709,7 +669,6 @@
 
   <div id="map-wrap">
     <div id="map"></div>
-    <div class="map-hint" id="map-hint">지도를 눌러 위치를 지정하세요</div>
     <button class="fab" id="fab-add" title="장소 제보하기">＋</button>
     <button class="locate-btn" id="locate-btn" title="내 위치로 이동">📍</button>
     <button class="list-toggle" id="list-toggle-btn">📋 목록보기 · <span class="cnt" id="list-toggle-count">0곳</span></button>
@@ -761,13 +720,6 @@
       <p class="sub">제보 주신 정보는 검토 후 지도에 반영됩니다.</p>
       <p class="notice">🐾 <strong>이동장·가방 없이 동반 가능</strong>하고 <strong>견종·체중 제한이 없는 곳</strong>만 등록하고 있어요. 조건에 맞지 않으면 반영이 어려울 수 있어요.</p>
 
-      <div class="field">
-        <label>지도 위치</label>
-        <div class="pin-status" id="pin-status">📍 위쪽 지도를 눌러 위치를 지정해 주세요</div>
-        <button type="button" id="btn-repick" hidden>위치 다시 잡기</button>
-      </div>
-
-      <!-- 위치를 잡는 동안에는 아래 입력칸을 접어서 지도를 크게 쓴다 -->
       <div id="modal-form">
       <div class="field">
         <label>상호명 / 장소명</label>
@@ -775,8 +727,9 @@
       </div>
 
       <div class="field">
-        <label>주소 (선택, 알고 계시면 적어주세요)</label>
+        <label>주소</label>
         <input type="text" id="f-address" placeholder="예: 서울 중구 을지로 123" />
+        <p class="field-hint">도로명주소로 적어주시면 지도에 더 정확히 표시돼요.</p>
       </div>
 
       <div class="field">
@@ -821,9 +774,6 @@
   let map;
   let markers = [];
   let infoWindow;
-  let pendingPin = null;
-  let pendingMarker = null;
-  let pickingMode = false;
   let currentFilter = 'all';
   let selectedSido = null; // null = 전체 지역
   const selectedGus = new Set(); // 비어있으면 선택된 시/도의 전체 구/군
@@ -931,14 +881,6 @@
     };
   }
 
-  // 제보 위치 지정용 핀은 노란색으로 구분
-  function pendingPinIcon() {
-    return {
-      content: `<div class="paw-pin selected">${pawSvg('#FFC94A')}</div>`,
-      size: new naver.maps.Size(30, 32),
-      anchor: new naver.maps.Point(15, 29),
-    };
-  }
 
   function filteredPlaces() {
     const q = searchQuery.trim().toLowerCase().replace(/\s+/g, '');
@@ -1139,13 +1081,9 @@
       maxWidth: 210,
     });
 
-    naver.maps.Event.addListener(map, 'click', (e) => {
-      if (!pickingMode) {
-        // 빈 지도를 누르면 말풍선을 닫는다
-        if (infoWindow.getMap()) { infoWindow.close(); clearSelectedMarker(); }
-        return;
-      }
-      setPendingPin(e.coord.y, e.coord.x);
+    // 빈 지도를 누르면 말풍선을 닫는다
+    naver.maps.Event.addListener(map, 'click', () => {
+      if (infoWindow.getMap()) { infoWindow.close(); clearSelectedMarker(); }
     });
   }
 
@@ -1163,44 +1101,6 @@
     if (pin) pin.classList.add('selected');
   }
 
-  // 위치를 잡는 동안 시트를 접어 지도를 넓게 쓴다
-  function enterPickingMode() {
-    pickingMode = true;
-    el('modal').classList.add('picking');
-    el('btn-repick').hidden = true;
-    el('map-hint').textContent = '지도를 눌러 위치를 지정하세요';
-    el('map-hint').classList.add('show');
-  }
-
-  function exitPickingMode() {
-    pickingMode = false;
-    el('modal').classList.remove('picking');
-    el('btn-repick').hidden = false;
-    el('map-hint').classList.remove('show');
-  }
-
-  function setPendingPin(lat, lng) {
-    const first = !pendingPin;
-    pendingPin = { lat, lng };
-    if (pendingMarker) pendingMarker.setMap(null);
-    pendingMarker = new naver.maps.Marker({
-      position: new naver.maps.LatLng(lat, lng),
-      map,
-      icon: pendingPinIcon(),
-    });
-    el('pin-status').classList.add('set');
-    el('pin-status').textContent = `📍 위치 지정됨 (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
-
-    if (first && map.getZoom() < 16) {
-      // 축척이 넓으면 한 번의 탭으로 수백 m가 어긋난다. 찍은 곳을 확대해 미세조정하게 한다.
-      map.morph(new naver.maps.LatLng(lat, lng), 17);
-      el('map-hint').textContent = '확대했어요. 정확한 위치를 다시 눌러주세요';
-    } else {
-      // 충분히 확대된 상태면 바로 입력 단계로 넘어간다
-      exitPickingMode();
-    }
-    checkSubmitEnabled();
-  }
 
   function perkTags() {
     // 견종·체중 제한없음, 이동장·개모차 불필요는 등록 조건상 모든 장소의 기본값이라
@@ -1321,28 +1221,21 @@
 
   // ---- Modal control (공개 제보 폼) ----
   function openModal() {
-    pendingPin = null;
-    if (pendingMarker) { pendingMarker.setMap(null); pendingMarker = null; }
     el('f-name').value = '';
     el('f-address').value = '';
     el('f-note').value = '';
     el('f-contact').value = '';
     document.querySelectorAll('#condition-chips .chip').forEach(c => c.classList.remove('active'));
     document.querySelector('#condition-chips .chip[data-val="free"]').classList.add('active');
-    el('pin-status').classList.remove('set');
-    el('pin-status').textContent = '📍 위쪽 지도를 눌러 위치를 지정해 주세요';
     el('btn-submit').disabled = true;
     el('btn-submit').textContent = '제보하기'; // 직전 제출이 중간에 끝났어도 라벨을 되돌린다
     el('modal-overlay').classList.add('show');
     el('modal').scrollTop = 0; // 시트가 스크롤된 채로 다시 열리지 않도록
-    enterPickingMode();
   }
 
   function closeModal() {
     el('modal-overlay').classList.remove('show');
     el('modal').classList.remove('picking');
-    pickingMode = false;
-    el('map-hint').classList.remove('show');
   }
 
   function selectedCondition() {
@@ -1355,21 +1248,21 @@
   //  못 찍는 사람이 제보 자체를 못 하는 상황을 막기 위함)
   function checkSubmitEnabled() {
     const hasName = !!el('f-name').value.trim();
-    const hasPlace = !!pendingPin || !!el('f-address').value.trim();
+    const hasPlace = !!el('f-address').value.trim();
     el('btn-submit').disabled = !(hasName && hasPlace);
   }
 
   async function submitReport() {
     const name = el('f-name').value.trim();
     const address = el('f-address').value.trim();
-    if (!name || (!pendingPin && !address)) return;
+    if (!name || !address) return;
     // 이동장·가방 없이 동반 가능 + 견종·체중 제한 없음은 모달 상단 안내문으로
     // 사전 고지하고, 실제로 만족하는지는 검토 단계에서 확인합니다(입력창 없이 항상 true로 전송).
     const payload = {
       name,
       address,
-      lat: pendingPin ? pendingPin.lat : '',
-      lng: pendingPin ? pendingPin.lng : '',
+      lat: '',
+      lng: '',
       condition: selectedCondition(),
       noCarrier: true,
       noRestriction: true,
@@ -1419,7 +1312,6 @@
     el('btn-submit').addEventListener('click', submitReport);
     el('f-name').addEventListener('input', checkSubmitEnabled);
     el('f-address').addEventListener('input', checkSubmitEnabled);
-    el('btn-repick').addEventListener('click', enterPickingMode);
 
     document.querySelectorAll('#condition-chips .chip').forEach((chip) => {
       chip.addEventListener('click', () => {
