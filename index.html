@@ -1036,6 +1036,7 @@
     el('pin-status').classList.remove('set');
     el('pin-status').textContent = '📍 아래 지도를 눌러 위치를 지정해 주세요';
     el('btn-submit').disabled = true;
+    el('btn-submit').textContent = '제보하기'; // 직전 제출이 중간에 끝났어도 라벨을 되돌린다
     pickingMode = true;
     el('map-hint').textContent = '지도를 눌러 위치를 지정하세요';
     el('map-hint').classList.add('show');
@@ -1076,11 +1077,27 @@
     el('btn-submit').disabled = true;
     el('btn-submit').textContent = '제출 중...';
     try {
-      await fetch(SHEET_API_URL, {
+      const res = await fetch(SHEET_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
       });
+      // 서버가 중복·정책 위반으로 반려할 수 있으므로 응답을 확인한다.
+      // (응답을 못 읽는 경우엔 접수된 것으로 보고 넘어간다)
+      let result = null;
+      try { result = await res.json(); } catch (_) { result = null; }
+
+      if (result && result.ok === false) {
+        if (result.duplicate) {
+          closeModal();
+          showToast(result.error || '이미 등록된 곳이에요.');
+        } else {
+          showToast(result.error || '제보를 접수하지 못했어요.');
+          el('btn-submit').disabled = false;
+          el('btn-submit').textContent = '제보하기';
+        }
+        return;
+      }
       closeModal();
       showToast('제보 감사합니다! 검토 후 지도에 반영될게요 🐾');
     } catch (e) {
